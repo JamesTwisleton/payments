@@ -3,7 +3,6 @@ package infrastructure.rest;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
-
 import lombok.extern.slf4j.Slf4j;
 import service.PaymentService;
 
@@ -19,7 +18,7 @@ public class PaymentController {
   public void startServer() throws Exception {
 
     // Create server listening on port 8000, allow up to 100 queued requests
-    HttpServer server = HttpServer.create(new InetSocketAddress(8000), 100);
+    var server = HttpServer.create(new InetSocketAddress(8000), 100);
 
     // listen on /payments
     server.createContext(
@@ -27,14 +26,16 @@ public class PaymentController {
         exchange -> {
           // Handle GET /payments to get all existing payments
           if ("GET".equals(exchange.getRequestMethod())) {
-            // Immediately delegate the GET request to the service
             paymentService.handleGetPayments(exchange);
 
             // Handle POST /payments to submit a new payment
           } else if ("POST".equals(exchange.getRequestMethod())) {
             paymentService.handlePostPayment(exchange);
 
-            // Send a 405 response for unsupported methods
+            // Handle PATCH /payments/{paymentId} to update the status of a payment
+          } else if ("PATCH".equals(exchange.getRequestMethod())) {
+            paymentService.handlePatchPayment(exchange);
+
           } else {
             exchange.sendResponseHeaders(405, -1); // 405 Method Not Allowed
           }

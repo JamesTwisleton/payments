@@ -5,10 +5,10 @@ import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import domain.dto.PaymentRequestDTO;
 import domain.entity.Payment;
+import domain.entity.PaymentStatus;
 import domain.repository.PaymentRepository;
 import infrastructure.messaging.KafkaProducer;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
@@ -52,8 +52,9 @@ public class PaymentService {
     // Send the response
     try {
       exchange.sendResponseHeaders(200, jsonResponse.getBytes(StandardCharsets.UTF_8).length);
-      var output = exchange.getResponseBody();
-      output.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+      try (var output = exchange.getResponseBody()) {
+        output.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
+      }
     } catch (IOException e) {
       log.error("Exception when getting payments: {}", e.getMessage());
     }
@@ -63,18 +64,77 @@ public class PaymentService {
   public void handlePostPayment(HttpExchange exchange) {
     try {
       // Read the request body (JSON) to create a new payment
-      InputStream requestBody = exchange.getRequestBody();
-      String body = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
+      var requestBody = exchange.getRequestBody();
+      var body = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
       log.info("Received POST request with body: {}", body);
 
       // Deserialize the JSON body into a PaymentDTO
-      PaymentRequestDTO paymentRequestDTO = gson.fromJson(body, PaymentRequestDTO.class);
+      var paymentRequestDTO = gson.fromJson(body, PaymentRequestDTO.class);
 
       // Delegate to the service to handle payment creation, processing, and response
       processPayment(paymentRequestDTO, exchange);
 
     } catch (IOException e) {
       log.error("Exception when creating payment: {}", e.getMessage());
+    }
+  }
+
+  // Handle PATCH /payments/{paymentId} to update the status of an existing payment
+  public void handlePatchPayment(HttpExchange exchange) {
+    try {
+
+      // Parse the paymentId from the URL (e.g., /payments/{paymentId})
+      var pathParts = exchange.getRequestURI().getPath().split("/");
+      var paymentId = pathParts[pathParts.length - 1];
+
+      // Read the request body (JSON) for the new status
+      var requestBody = exchange.getRequestBody();
+      var body = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
+      log.info("Received PATCH request with body: {}", body);
+
+      // Extract the new status from the request
+      var jsonObject = gson.fromJson(body, JsonObject.class);
+      var newStatusString = jsonObject.get("status").getAsString();
+
+      // Convert the status to the PaymentStatus enum
+      var newStatus = PaymentStatus.valueOf(newStatusString.toUpperCase());
+
+      // Send an immediate response to the client
+      var response = "Status update is being processed for Payment ID: " + paymentId;
+      exchange.sendResponseHeaders(200, response.getBytes(StandardCharsets.UTF_8).length);
+      try (var output = exchange.getResponseBody()) {
+        output.write(response.getBytes(StandardCharsets.UTF_8));
+      }
+
+      // Process the payment status update asynchronously
+      executorService.submit(
+          () -> {
+            try {
+              log.info("Processing payment status update for Payment ID: {}", paymentId);
+
+              // Update the payment status in a thread-safe manner
+              updatePaymentStatus(paymentId, newStatus);
+
+              log.info("Payment status updated for ID: {} to status: {}", paymentId, newStatus);
+
+              // Optionally publish an event to Kafka
+              Payment updatedPayment = paymentRepository.findById(paymentId);
+              kafkaProducer.send("payment.status.updated", updatedPayment);
+
+            } catch (Exception e) {
+              log.error("Error processing payment status update for ID: {}", paymentId, e);
+            }
+          });
+
+    } catch (IOException e) {
+      log.error("Error handling PATCH request: {}", e.getMessage());
+    } catch (IllegalArgumentException e) {
+      log.error("Invalid status value provided: {}", e.getMessage());
+      try {
+        exchange.sendResponseHeaders(400, -1); // 400 Bad Request
+      } catch (IOException ioException) {
+        log.error("Error sending 400 response: {}", ioException.getMessage());
+      }
     }
   }
 
@@ -126,5 +186,34 @@ public class PaymentService {
             }
           }
         });
+  }
+
+  // Modifies an existing payment in a thread-safe manner
+  public synchronized void updatePaymentStatus(String paymentId, PaymentStatus newStatus) {
+
+    // Retrieve the payment
+    Payment payment = paymentRepository.findById(paymentId);
+
+    if (payment != null) {
+      // Modify the payment status
+      Payment updatedPayment =
+          new Payment(
+              payment.paymentId(),
+              payment.payerId(),
+              payment.recipientId(),
+              payment.amount(),
+              payment.currency(),
+              newStatus);
+
+      // Save the updated payment
+      paymentRepository.save(updatedPayment);
+
+      log.info("Payment status updated to: {} for payment ID: {}", newStatus, paymentId);
+
+      // publish an update event to Kafka
+      kafkaProducer.send("payment.status.updated", updatedPayment);
+    } else {
+      log.error("Payment not found for ID: {}", paymentId);
+    }
   }
 }

@@ -22,25 +22,4 @@ public class InMemoryPaymentRepository implements PaymentRepository {
   public Map<String, Payment> findAll() {
     return payments;
   }
-
-  // Modifies an existing payment in a thread safe manner
-  public synchronized void updatePaymentStatus(String paymentId, PaymentStatus newStatus) {
-
-    // Retrieve the payment
-    Payment payment = findById(paymentId);
-
-    if (payment != null) {
-      // Modify the payment status
-      Payment updatedPayment =
-          new Payment(
-              payment.paymentId(),
-              payment.payerId(),
-              payment.recipientId(),
-              payment.amount(),
-              payment.currency(),
-              newStatus);
-      // Save the updated payment
-      save(updatedPayment);
-    }
-  }
 }
