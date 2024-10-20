@@ -5,14 +5,17 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
 import service.PaymentService;
+import service.TransactionService;
 
 @Slf4j
 public class PaymentController {
 
   private final PaymentService paymentService;
+  private final TransactionService transactionService;
 
-  public PaymentController(PaymentService paymentService) {
+  public PaymentController(PaymentService paymentService, TransactionService transactionService) {
     this.paymentService = paymentService;
+    this.transactionService = transactionService;
   }
 
   public void startServer() throws Exception {
@@ -24,20 +27,26 @@ public class PaymentController {
     server.createContext(
         "/payments",
         exchange -> {
-          // Handle GET /payments to get all existing payments
-          if ("GET".equals(exchange.getRequestMethod())) {
-            paymentService.handleGetPayments(exchange);
+          switch (exchange.getRequestMethod()) {
+            case "GET":
+              paymentService.handleGetPayments(exchange);
+            case "POST":
+              paymentService.handlePostPayment(exchange);
+            case "PATCH":
+              paymentService.handlePatchPayment(exchange);
+            default:
+              exchange.sendResponseHeaders(405, -1); // 405 Method Not Allowed
+          }
+        });
 
-            // Handle POST /payments to submit a new payment
-          } else if ("POST".equals(exchange.getRequestMethod())) {
-            paymentService.handlePostPayment(exchange);
-
-            // Handle PATCH /payments/{paymentId} to update the status of a payment
-          } else if ("PATCH".equals(exchange.getRequestMethod())) {
-            paymentService.handlePatchPayment(exchange);
-
-          } else {
-            exchange.sendResponseHeaders(405, -1); // 405 Method Not Allowed
+    server.createContext(
+        "/transactions",
+        exchange -> {
+          switch (exchange.getRequestMethod()) {
+            case "POST":
+              transactionService.HandlePostTransaction(exchange);
+            default:
+              exchange.sendResponseHeaders(405, -1);
           }
         });
 
