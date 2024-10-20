@@ -3,217 +3,144 @@ package service;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
-import domain.dto.PaymentRequestDTO;
-import domain.entity.Payment;
-import domain.entity.PaymentStatus;
-import domain.repository.PaymentRepository;
-import infrastructure.messaging.KafkaProducer;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import domain.dto.AccountDTO;
+import domain.dto.TransactionRequestDTO;
+import domain.entity.Account;
+import domain.entity.Transaction;
+import domain.entity.TransactionStatus;
+import domain.repository.AccountRepository;
+import domain.repository.TransactionRepository;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
+import util.Utils;
 
 @Slf4j
 public class PaymentService {
-  private final PaymentRepository paymentRepository;
-  private final KafkaProducer kafkaProducer;
-  private final ExecutorService executorService;
-  private final Gson gson = new Gson();
 
-  public PaymentService(PaymentRepository paymentRepository, KafkaProducer kafkaProducer) {
-    this.paymentRepository = paymentRepository;
-    this.kafkaProducer = kafkaProducer;
-    this.executorService = Executors.newFixedThreadPool(10); // Thread pool with 10 threads
+  private final AccountRepository accountRepository;
+  private final TransactionRepository transactionRepository;
+
+  public PaymentService(
+      AccountRepository accountRepository, TransactionRepository transactionRepository) {
+    this.accountRepository = accountRepository;
+    this.transactionRepository = transactionRepository;
   }
 
-  // Handle GET /payments - Return all payments as a JSON response
-  public void handleGetPayments(HttpExchange exchange) {
+  public void handlePostTransaction(HttpExchange exchange) {
+    TransactionRequestDTO transactionRequestDto =
+        Utils.getRequestBodyAsType(exchange, TransactionRequestDTO.class);
 
-    // Fetch all payments and convert to PaymentResponseDTO
-    var paymentDtos =
-        paymentRepository.findAll().values().stream()
-            .map(Payment::toResponseDto)
-            .collect(Collectors.toList());
-
-    // Create a JSON object to wrap the list of payments
-    var jsonObject = new JsonObject();
-    jsonObject.add("payments", new Gson().toJsonTree(paymentDtos));
-
-    // Convert to JSON string
-    String jsonResponse = new Gson().toJson(jsonObject);
-    log.info("Returning JSON response: {}", jsonResponse);
-
-    // Set the response content type to application/json
-    exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-
-    // Send the response
-    try {
-      exchange.sendResponseHeaders(200, jsonResponse.getBytes(StandardCharsets.UTF_8).length);
-      try (var output = exchange.getResponseBody()) {
-        output.write(jsonResponse.getBytes(StandardCharsets.UTF_8));
-      }
-    } catch (IOException e) {
-      log.error("Exception when getting payments: {}", e.getMessage());
+    if (transactionRequestDto == null) {
+      return; // Invalid request body, response already sent in getRequestBodyAsType
     }
-  }
 
-  // Handle POST /payments - Accept JSON request body to create a new payment
-  public void handlePostPayment(HttpExchange exchange) {
-    try {
-      // Read the request body (JSON) to create a new payment
-      var requestBody = exchange.getRequestBody();
-      var body = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
-      log.info("Received POST request with body: {}", body);
+    String senderId = transactionRequestDto.senderId();
+    String recipientId = transactionRequestDto.recipientId();
+    var amount = transactionRequestDto.amount();
 
-      // Deserialize the JSON body into a PaymentDTO
-      var paymentRequestDTO = gson.fromJson(body, PaymentRequestDTO.class);
+    var maybeSenderAccount = accountRepository.findByAccountId(senderId);
+    var maybeRecipientAccount = accountRepository.findByAccountId(recipientId);
+    var transactionBuilder =
+        Transaction.builder()
+            .transactionId(UUID.randomUUID().toString())
+            .senderId(senderId)
+            .recipientId(recipientId)
+            .amount(amount);
+    var jsonResponse = new JsonObject();
 
-      // Delegate to the service to handle payment creation, processing, and response
-      processPayment(paymentRequestDTO, exchange);
-
-    } catch (IOException e) {
-      log.error("Exception when creating payment: {}", e.getMessage());
-    }
-  }
-
-  // Handle PATCH /payments/{paymentId} to update the status of an existing payment
-  public void handlePatchPayment(HttpExchange exchange) {
-    try {
-
-      // Parse the paymentId from the URL (e.g., /payments/{paymentId})
-      var pathParts = exchange.getRequestURI().getPath().split("/");
-      var paymentId = pathParts[pathParts.length - 1];
-
-      // Read the request body (JSON) for the new status
-      var requestBody = exchange.getRequestBody();
-      var body = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
-      log.info("Received PATCH request with body: {}", body);
-
-      // Extract the new status from the request
-      var jsonObject = gson.fromJson(body, JsonObject.class);
-      var newStatusString = jsonObject.get("status").getAsString();
-
-      // Convert the status to the PaymentStatus enum
-      var newStatus = PaymentStatus.valueOf(newStatusString.toUpperCase());
-
-      // Send an immediate response to the client
-      var response = "Status update is being processed for Payment ID: " + paymentId;
-      exchange.sendResponseHeaders(200, response.getBytes(StandardCharsets.UTF_8).length);
-      try (var output = exchange.getResponseBody()) {
-        output.write(response.getBytes(StandardCharsets.UTF_8));
-      }
-
-      // Process the payment status update asynchronously
-      executorService.submit(
-          () -> {
-            try {
-              log.info("Processing payment status update for Payment ID: {}", paymentId);
-
-              // Update the payment status in a thread-safe manner
-              updatePaymentStatus(paymentId, newStatus);
-
-              log.info("Payment status updated for ID: {} to status: {}", paymentId, newStatus);
-
-              // Optionally publish an event to Kafka
-              Payment updatedPayment = paymentRepository.findById(paymentId);
-              kafkaProducer.send("payment.status.updated", updatedPayment);
-
-            } catch (Exception e) {
-              log.error("Error processing payment status update for ID: {}", paymentId, e);
-            }
-          });
-
-    } catch (IOException e) {
-      log.error("Error handling PATCH request: {}", e.getMessage());
-    } catch (IllegalArgumentException e) {
-      log.error("Invalid status value provided: {}", e.getMessage());
-      try {
-        exchange.sendResponseHeaders(400, -1); // 400 Bad Request
-      } catch (IOException ioException) {
-        log.error("Error sending 400 response: {}", ioException.getMessage());
-      }
-    }
-  }
-
-  // Process payment and send response back via HttpExchange (for POST /payments)
-  private void processPayment(PaymentRequestDTO paymentRequestDTO, HttpExchange exchange) {
-    var payment = Payment.fromRequestDTO(paymentRequestDTO); // Convert DTO to domain entity
-
-    // Send a response confirming the payment processing (but processing continues asynchronously)
-    String response = "Payment processing started for ID: " + payment.paymentId();
-    try {
-      exchange.sendResponseHeaders(200, response.getBytes(StandardCharsets.UTF_8).length);
-      try (OutputStream output = exchange.getResponseBody()) {
-        output.write(response.getBytes(StandardCharsets.UTF_8));
-      }
-    } catch (IOException e) {
-      log.error("Error sending response for payment creation: {}", e.getMessage());
+    if (maybeSenderAccount.isEmpty()) {
+      jsonResponse.addProperty("error", String.format("Invalid sender account ID: %s", senderId));
+      Utils.sendResponse(exchange, 404, jsonResponse);
+      transactionRepository.save(
+          transactionBuilder.status(TransactionStatus.SENDER_NOT_FOUND).build());
       return;
     }
 
-    // Process payment asynchronously
-    executorService.submit(
-        () -> {
-          synchronized (payment) { // Synchronize on the individual Payment object
-            try {
-              log.info("Processing payment: {}", payment.paymentId());
+    if (maybeRecipientAccount.isEmpty()) {
+      jsonResponse.addProperty(
+          "error", String.format("Invalid recipient account ID: %s", recipientId));
+      Utils.sendResponse(exchange, 404, jsonResponse);
+      transactionRepository.save(
+          transactionBuilder.status(TransactionStatus.RECIPIENT_NOT_FOUND).build());
+      return;
+    }
 
-              // Simulate some processing delay
-              Thread.sleep(1000);
+    Account senderAccount = maybeSenderAccount.get();
+    Account recipientAccount = maybeRecipientAccount.get();
 
-              // Mark payment as successful and save it
-              Payment updatedPayment = payment.markSuccess();
-              paymentRepository.save(updatedPayment);
+    Utils.acquireLocks(senderAccount, recipientAccount);
 
-              // Publish success event to Kafka
-              kafkaProducer.send("payment.success", updatedPayment);
+    try {
+      if (senderAccount.getBalance().compareTo(amount) < 0) {
+        jsonResponse.addProperty(
+            "error", String.format("Insufficient balance in sender account %s", senderId));
+        Utils.sendResponse(exchange, 400, jsonResponse);
+        transactionRepository.save(
+            transactionBuilder.status(TransactionStatus.INSUFFICIENT_BALANCE).build());
+        return;
+      }
 
-              // Only log the payment creation after the Kafka producer has successfully sent the
-              // message
-              log.info(
-                  "Payment created and event published for ID: {}", updatedPayment.paymentId());
+      // Perform the balance transfer
+      senderAccount.setBalance(senderAccount.getBalance().subtract(amount));
+      recipientAccount.setBalance(recipientAccount.getBalance().add(amount));
 
-            } catch (Exception e) {
-              log.error("Error processing payment: {}", payment.paymentId(), e);
+      log.info("Transaction successful from {} to {} for amount {}", senderId, recipientId, amount);
+      log.info(
+          "Account {} now has balance {}, Account {} now has balance {}",
+          senderId,
+          senderAccount.getBalance(),
+          recipientId,
+          recipientAccount.getBalance());
 
-              // Handle failed payments and publish failure events
-              Payment failedPayment = payment.markFailed();
-              paymentRepository.save(failedPayment);
-              kafkaProducer.send("payment.failed", failedPayment);
-            }
-          }
-        });
+      transactionRepository.save(transactionBuilder.status(TransactionStatus.SUCCESS).build());
+
+      var successResponse = new JsonObject();
+      successResponse.addProperty("message", "Transaction successful!");
+      Utils.sendResponse(exchange, 200, successResponse);
+    } finally {
+      Utils.releaseLocks(senderAccount, recipientAccount);
+    }
   }
 
-  // Modifies an existing payment in a thread-safe manner
-  public synchronized void updatePaymentStatus(String paymentId, PaymentStatus newStatus) {
+  public void handleGetTransactions(HttpExchange exchange) {
+    var transactionDtos =
+        transactionRepository.findAll().values().stream()
+            .map(Transaction::toResponseDto)
+            .collect(Collectors.toList());
 
-    // Retrieve the payment
-    Payment payment = paymentRepository.findById(paymentId);
+    var jsonObject = new JsonObject();
+    jsonObject.add("transactions", new Gson().toJsonTree(transactionDtos));
 
-    if (payment != null) {
-      // Modify the payment status
-      Payment updatedPayment =
-          new Payment(
-              payment.paymentId(),
-              payment.payerId(),
-              payment.recipientId(),
-              payment.amount(),
-              payment.currency(),
-              newStatus);
+    Utils.sendResponse(exchange, 200, jsonObject);
+  }
 
-      // Save the updated payment
-      paymentRepository.save(updatedPayment);
+  public void handleGetAccount(HttpExchange exchange) {
+    String path = exchange.getRequestURI().getPath(); // Get the full request URI
+    String accountId = path.substring(path.lastIndexOf("/") + 1);
+    var jsonResponse = new JsonObject();
 
-      log.info("Payment status updated to: {} for payment ID: {}", newStatus, paymentId);
+    var accountOptional = accountRepository.findByAccountId(accountId);
 
-      // publish an update event to Kafka
-      kafkaProducer.send("payment.status.updated", updatedPayment);
-    } else {
-      log.error("Payment not found for ID: {}", paymentId);
+    if (accountOptional.isEmpty()) {
+      log.error("Request for non existent account {}", accountId);
+      jsonResponse.addProperty("error", "Account not found");
+      Utils.sendResponse(exchange, 404, jsonResponse);
+      return;
     }
+
+    // Create account DTO and send in response
+    var account = accountOptional.get();
+    jsonResponse.add(
+        "account",
+        new Gson()
+            .toJsonTree(
+                AccountDTO.builder()
+                    .accountId(account.getAccountId())
+                    .balance(account.getBalance().toString())
+                    .build()));
+
+    log.info("Successfully retrieved account with ID: {}", accountId);
+    Utils.sendResponse(exchange, 200, jsonResponse);
   }
 }

@@ -2,6 +2,7 @@ package infrastructure.rest;
 
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
+import java.util.Properties;
 import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
 import service.PaymentService;
@@ -10,40 +11,46 @@ import service.PaymentService;
 public class PaymentController {
 
   private final PaymentService paymentService;
+  private final int port;
+  private HttpServer server;
 
-  public PaymentController(PaymentService paymentService) {
+  public PaymentController(PaymentService paymentService, Properties config) {
     this.paymentService = paymentService;
+    this.port = Integer.parseInt(config.getProperty("port"));
   }
 
   public void startServer() throws Exception {
 
-    // Create server listening on port 8000, allow up to 100 queued requests
-    var server = HttpServer.create(new InetSocketAddress(8000), 100);
+    // Create server listening on specified port, allow up to 100 queued requests
+    server = HttpServer.create(new InetSocketAddress(port), 100);
 
-    // listen on /payments
     server.createContext(
-        "/payments",
+        "/transactions",
         exchange -> {
-          // Handle GET /payments to get all existing payments
-          if ("GET".equals(exchange.getRequestMethod())) {
-            paymentService.handleGetPayments(exchange);
-
-            // Handle POST /payments to submit a new payment
-          } else if ("POST".equals(exchange.getRequestMethod())) {
-            paymentService.handlePostPayment(exchange);
-
-            // Handle PATCH /payments/{paymentId} to update the status of a payment
-          } else if ("PATCH".equals(exchange.getRequestMethod())) {
-            paymentService.handlePatchPayment(exchange);
-
-          } else {
-            exchange.sendResponseHeaders(405, -1); // 405 Method Not Allowed
+          switch (exchange.getRequestMethod()) {
+            case "POST":
+              paymentService.handlePostTransaction(exchange);
+              return;
+            case "GET":
+              paymentService.handleGetTransactions(exchange);
+              return;
+            default:
+              exchange.sendResponseHeaders(405, -1);
           }
         });
+
+    server.createContext("/accounts", paymentService::handleGetAccount);
 
     // Handle requests concurrently with a thread pool executor
     server.setExecutor(Executors.newFixedThreadPool(10)); // Thread pool with 10 threads
     server.start();
-    log.info("Server started on port 8000");
+    log.info("Payments server started on port {}", port);
+  }
+
+  public void stopServer() {
+    if (server != null) {
+      server.stop(0);
+      log.info("Payments server stopped.");
+    }
   }
 }
