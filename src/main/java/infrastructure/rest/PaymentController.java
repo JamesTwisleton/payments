@@ -14,8 +14,10 @@ public class PaymentController {
   private final PaymentService paymentService;
   private final TransactionService transactionService;
   private final int port;
+  private HttpServer server;
 
-  public PaymentController(PaymentService paymentService, TransactionService transactionService, Properties config) {
+  public PaymentController(
+      PaymentService paymentService, TransactionService transactionService, Properties config) {
     this.paymentService = paymentService;
     this.transactionService = transactionService;
     this.port = Integer.parseInt(config.getProperty("port"));
@@ -24,7 +26,7 @@ public class PaymentController {
   public void startServer() throws Exception {
 
     // Create server listening on specified port, allow up to 100 queued requests
-    var server = HttpServer.create(new InetSocketAddress(port), 100);
+    server = HttpServer.create(new InetSocketAddress(port), 100);
 
     // VERSION 0
     server.createContext(
@@ -58,5 +60,12 @@ public class PaymentController {
     server.setExecutor(Executors.newFixedThreadPool(10)); // Thread pool with 10 threads
     server.start();
     log.info("Payments server started on port {}", port);
+  }
+
+  public void stopServer() {
+    if (server != null) {
+      server.stop(0); // 0 means immediate stop
+      log.info("Payments server stopped.");
+    }
   }
 }
