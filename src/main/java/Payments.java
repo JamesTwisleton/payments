@@ -1,4 +1,5 @@
 import config.ConfigLoader;
+import domain.repository.InMemoryAccountRepository;
 import domain.repository.InMemoryPaymentRepository;
 import infrastructure.messaging.KafkaProducer;
 import infrastructure.rest.PaymentController;
@@ -16,7 +17,8 @@ public class Payments {
     InMemoryPaymentRepository paymentRepository = new InMemoryPaymentRepository();
     KafkaProducer kafkaProducer = new KafkaProducer();
     PaymentService paymentService = new PaymentService(paymentRepository, kafkaProducer);
-    TransactionService transactionService = new TransactionService();
+    InMemoryAccountRepository accountRepository = new InMemoryAccountRepository();
+    TransactionService transactionService = new TransactionService(accountRepository);
     PaymentController controller = new PaymentController(paymentService, transactionService, config);
 
     // Start the server

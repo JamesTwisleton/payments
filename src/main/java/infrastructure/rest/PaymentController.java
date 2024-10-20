@@ -26,7 +26,7 @@ public class PaymentController {
     // Create server listening on specified port, allow up to 100 queued requests
     var server = HttpServer.create(new InetSocketAddress(port), 100);
 
-    // listen on /payments
+    // VERSION 0
     server.createContext(
         "/payments",
         exchange -> {
@@ -42,6 +42,7 @@ public class PaymentController {
           }
         });
 
+    // VERSION 1
     server.createContext(
         "/transactions",
         exchange -> {
