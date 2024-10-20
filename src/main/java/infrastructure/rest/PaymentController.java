@@ -48,7 +48,7 @@ public class PaymentController {
         exchange -> {
           switch (exchange.getRequestMethod()) {
             case "POST":
-              transactionService.HandlePostTransaction(exchange);
+              transactionService.handlePostTransaction(exchange);
             default:
               exchange.sendResponseHeaders(405, -1);
           }
