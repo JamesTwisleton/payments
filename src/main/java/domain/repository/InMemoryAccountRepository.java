@@ -1,8 +1,6 @@
 package domain.repository;
 
 import domain.entity.Account;
-import domain.entity.Payment;
-
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Optional;
@@ -60,4 +58,4 @@ public class InMemoryAccountRepository implements AccountRepository {
   public Map<String, Account> findAll() {
     return accounts;
   }
- }
+}

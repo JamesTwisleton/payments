@@ -10,15 +10,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class Account {
-    private final String accountId;
-    private BigDecimal balance;
-    private final ReentrantLock lock = new ReentrantLock();
-
-    public void lock() {
-        lock.lock();
-    }
-
-    public void unlock() {
-        lock.unlock();
-    }
+  private final String accountId;
+  private BigDecimal balance;
+  private final ReentrantLock lock = new ReentrantLock();
 }

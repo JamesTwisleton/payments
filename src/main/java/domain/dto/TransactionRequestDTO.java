@@ -1,7 +1,7 @@
 package domain.dto;
 
-import domain.entity.PaymentCurrency;
+import domain.entity.TransactionCurrency;
 import java.math.BigDecimal;
 
 public record TransactionRequestDTO(
-    String senderId, String recipientId, BigDecimal amount, PaymentCurrency currency) {}
+    String senderId, String recipientId, BigDecimal amount, TransactionCurrency currency) {}

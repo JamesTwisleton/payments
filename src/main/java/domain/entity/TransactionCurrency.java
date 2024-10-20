@@ -1,6 +1,6 @@
 package domain.entity;
 
-public enum PaymentCurrency {
+public enum TransactionCurrency {
   EUR,
   USD,
   JPY

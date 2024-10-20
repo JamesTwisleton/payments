@@ -5,20 +5,16 @@ import java.net.InetSocketAddress;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
-import service.PaymentService;
 import service.TransactionService;
 
 @Slf4j
 public class PaymentController {
 
-  private final PaymentService paymentService;
   private final TransactionService transactionService;
   private final int port;
   private HttpServer server;
 
-  public PaymentController(
-      PaymentService paymentService, TransactionService transactionService, Properties config) {
-    this.paymentService = paymentService;
+  public PaymentController(TransactionService transactionService, Properties config) {
     this.transactionService = transactionService;
     this.port = Integer.parseInt(config.getProperty("port"));
   }
@@ -28,23 +24,6 @@ public class PaymentController {
     // Create server listening on specified port, allow up to 100 queued requests
     server = HttpServer.create(new InetSocketAddress(port), 100);
 
-    // VERSION 0
-    server.createContext(
-        "/payments",
-        exchange -> {
-          switch (exchange.getRequestMethod()) {
-            case "GET":
-              paymentService.handleGetPayments(exchange);
-            case "POST":
-              paymentService.handlePostPayment(exchange);
-            case "PATCH":
-              paymentService.handlePatchPayment(exchange);
-            default:
-              exchange.sendResponseHeaders(405, -1); // 405 Method Not Allowed
-          }
-        });
-
-    // VERSION 1
     server.createContext(
         "/transactions",
         exchange -> {
@@ -66,7 +45,7 @@ public class PaymentController {
 
   public void stopServer() {
     if (server != null) {
-      server.stop(0); // 0 means immediate stop
+      server.stop(0);
       log.info("Payments server stopped.");
     }
   }

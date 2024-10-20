@@ -1,8 +1,6 @@
 package domain.repository;
 
-import domain.entity.Payment;
 import domain.entity.Transaction;
-
 import java.util.Map;
 
 public interface TransactionRepository {

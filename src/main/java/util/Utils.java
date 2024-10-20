@@ -10,7 +10,7 @@ import java.util.concurrent.locks.Lock;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class PaymentUtils {
+public class Utils {
 
   private static final Gson gson = new Gson();
 
@@ -42,7 +42,6 @@ public class PaymentUtils {
     firstLock.unlock();
   }
 
-  // Sends a JSON response (always expects a valid JSON object)
   public static void sendResponse(
       HttpExchange exchange, int responseCode, JsonObject responseBody) {
     try {
@@ -59,7 +58,6 @@ public class PaymentUtils {
     }
   }
 
-  // Generic method to get the request body as a specified type and handle errors
   public static <T> T getRequestBodyAsType(HttpExchange exchange, Class<T> type) {
     try {
       var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -69,12 +67,9 @@ public class PaymentUtils {
       return gson.fromJson(body, type);
     } catch (Exception e) {
       log.error("Failed to read request body: {}", e.getMessage(), e);
-
-      // Send a valid JSON object with an error message
       var errorResponse = new JsonObject();
       errorResponse.addProperty("error", "Failed to parse request body");
       sendResponse(exchange, 400, errorResponse);
-
       return null;
     }
   }

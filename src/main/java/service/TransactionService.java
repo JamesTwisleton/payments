@@ -9,11 +9,10 @@ import domain.entity.Transaction;
 import domain.entity.TransactionStatus;
 import domain.repository.AccountRepository;
 import domain.repository.TransactionRepository;
-import lombok.extern.slf4j.Slf4j;
-import util.PaymentUtils;
-
 import java.util.UUID;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
+import util.Utils;
 
 @Slf4j
 public class TransactionService {
@@ -29,7 +28,7 @@ public class TransactionService {
 
   public void handlePostTransaction(HttpExchange exchange) {
     TransactionRequestDTO transactionRequestDto =
-        PaymentUtils.getRequestBodyAsType(exchange, TransactionRequestDTO.class);
+        Utils.getRequestBodyAsType(exchange, TransactionRequestDTO.class);
 
     if (transactionRequestDto == null) {
       return; // Invalid request body, response already sent in getRequestBodyAsType
@@ -51,7 +50,7 @@ public class TransactionService {
 
     if (maybeSenderAccount.isEmpty()) {
       jsonResponse.addProperty("error", String.format("Invalid sender account ID: %s", senderId));
-      PaymentUtils.sendResponse(exchange, 404, jsonResponse);
+      Utils.sendResponse(exchange, 404, jsonResponse);
       transactionRepository.save(
           transactionBuilder.status(TransactionStatus.SENDER_NOT_FOUND).build());
       return;
@@ -60,7 +59,7 @@ public class TransactionService {
     if (maybeRecipientAccount.isEmpty()) {
       jsonResponse.addProperty(
           "error", String.format("Invalid recipient account ID: %s", recipientId));
-      PaymentUtils.sendResponse(exchange, 404, jsonResponse);
+      Utils.sendResponse(exchange, 404, jsonResponse);
       transactionRepository.save(
           transactionBuilder.status(TransactionStatus.RECIPIENT_NOT_FOUND).build());
       return;
@@ -69,13 +68,13 @@ public class TransactionService {
     Account senderAccount = maybeSenderAccount.get();
     Account recipientAccount = maybeRecipientAccount.get();
 
-    PaymentUtils.acquireLocks(senderAccount, recipientAccount);
+    Utils.acquireLocks(senderAccount, recipientAccount);
 
     try {
       if (senderAccount.getBalance().compareTo(amount) < 0) {
         jsonResponse.addProperty(
             "error", String.format("Insufficient balance in sender account %s", senderId));
-        PaymentUtils.sendResponse(exchange, 400, jsonResponse);
+        Utils.sendResponse(exchange, 400, jsonResponse);
         transactionRepository.save(
             transactionBuilder.status(TransactionStatus.INSUFFICIENT_BALANCE).build());
         return;
@@ -97,10 +96,10 @@ public class TransactionService {
 
       var successResponse = new JsonObject();
       successResponse.addProperty("message", "Transaction successful!");
-      PaymentUtils.sendResponse(exchange, 200, successResponse);
+      Utils.sendResponse(exchange, 200, successResponse);
 
     } finally {
-      PaymentUtils.releaseLocks(senderAccount, recipientAccount);
+      Utils.releaseLocks(senderAccount, recipientAccount);
     }
   }
 
@@ -113,6 +112,6 @@ public class TransactionService {
     var jsonObject = new JsonObject();
     jsonObject.add("transactions", new Gson().toJsonTree(transactionDtos));
 
-    PaymentUtils.sendResponse(exchange, 200, jsonObject);
+    Utils.sendResponse(exchange, 200, jsonObject);
   }
 }
