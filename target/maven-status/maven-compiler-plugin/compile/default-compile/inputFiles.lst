@@ -6,6 +6,7 @@
 /Users/jamestwisleton/git/payments/src/main/java/domain/entity/PaymentCurrency.java
 /Users/jamestwisleton/git/payments/src/main/java/infrastructure/rest/PaymentController.java
 /Users/jamestwisleton/git/payments/src/main/java/domain/entity/PaymentStatus.java
+/Users/jamestwisleton/git/payments/src/main/java/service/TransactionService.java
 /Users/jamestwisleton/git/payments/src/main/java/service/PaymentService.java
 /Users/jamestwisleton/git/payments/src/main/java/domain/dto/PaymentResponseDTO.java
 /Users/jamestwisleton/git/payments/src/main/java/domain/dto/PaymentRequestDTO.java

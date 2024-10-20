@@ -2,6 +2,7 @@ package infrastructure.rest;
 
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
+import java.util.Properties;
 import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
 import service.PaymentService;
@@ -12,16 +13,18 @@ public class PaymentController {
 
   private final PaymentService paymentService;
   private final TransactionService transactionService;
+  private final int port;
 
-  public PaymentController(PaymentService paymentService, TransactionService transactionService) {
+  public PaymentController(PaymentService paymentService, TransactionService transactionService, Properties config) {
     this.paymentService = paymentService;
     this.transactionService = transactionService;
+    this.port = Integer.parseInt(config.getProperty("port"));
   }
 
   public void startServer() throws Exception {
 
-    // Create server listening on port 8000, allow up to 100 queued requests
-    var server = HttpServer.create(new InetSocketAddress(8000), 100);
+    // Create server listening on specified port, allow up to 100 queued requests
+    var server = HttpServer.create(new InetSocketAddress(port), 100);
 
     // listen on /payments
     server.createContext(
@@ -53,6 +56,6 @@ public class PaymentController {
     // Handle requests concurrently with a thread pool executor
     server.setExecutor(Executors.newFixedThreadPool(10)); // Thread pool with 10 threads
     server.start();
-    log.info("Server started on port 8000");
+    log.info("Payments server started on port {}", port);
   }
 }

@@ -6,6 +6,7 @@ domain/dto/PaymentResponseDTO.class
 service/PaymentService.class
 domain/entity/PaymentStatus.class
 domain/entity/Payment.class
+service/TransactionService.class
 Payments.class
 domain/repository/InMemoryPaymentRepository.class
 domain/dto/PaymentResponseDTO$PaymentResponseDTOBuilder.class
