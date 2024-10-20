@@ -5,17 +5,17 @@ import java.net.InetSocketAddress;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import lombok.extern.slf4j.Slf4j;
-import service.TransactionService;
+import service.PaymentService;
 
 @Slf4j
 public class PaymentController {
 
-  private final TransactionService transactionService;
+  private final PaymentService paymentService;
   private final int port;
   private HttpServer server;
 
-  public PaymentController(TransactionService transactionService, Properties config) {
-    this.transactionService = transactionService;
+  public PaymentController(PaymentService paymentService, Properties config) {
+    this.paymentService = paymentService;
     this.port = Integer.parseInt(config.getProperty("port"));
   }
 
@@ -29,13 +29,17 @@ public class PaymentController {
         exchange -> {
           switch (exchange.getRequestMethod()) {
             case "POST":
-              transactionService.handlePostTransaction(exchange);
+              paymentService.handlePostTransaction(exchange);
+              return;
             case "GET":
-              transactionService.handleGetTransactions(exchange);
+              paymentService.handleGetTransactions(exchange);
+              return;
             default:
               exchange.sendResponseHeaders(405, -1);
           }
         });
+
+    server.createContext("/accounts", paymentService::handleGetAccount);
 
     // Handle requests concurrently with a thread pool executor
     server.setExecutor(Executors.newFixedThreadPool(10)); // Thread pool with 10 threads

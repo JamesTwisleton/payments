@@ -3,6 +3,7 @@ package service;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
+import domain.dto.AccountDTO;
 import domain.dto.TransactionRequestDTO;
 import domain.entity.Account;
 import domain.entity.Transaction;
@@ -15,12 +16,12 @@ import lombok.extern.slf4j.Slf4j;
 import util.Utils;
 
 @Slf4j
-public class TransactionService {
+public class PaymentService {
 
   private final AccountRepository accountRepository;
   private final TransactionRepository transactionRepository;
 
-  public TransactionService(
+  public PaymentService(
       AccountRepository accountRepository, TransactionRepository transactionRepository) {
     this.accountRepository = accountRepository;
     this.transactionRepository = transactionRepository;
@@ -97,7 +98,6 @@ public class TransactionService {
       var successResponse = new JsonObject();
       successResponse.addProperty("message", "Transaction successful!");
       Utils.sendResponse(exchange, 200, successResponse);
-
     } finally {
       Utils.releaseLocks(senderAccount, recipientAccount);
     }
@@ -113,5 +113,34 @@ public class TransactionService {
     jsonObject.add("transactions", new Gson().toJsonTree(transactionDtos));
 
     Utils.sendResponse(exchange, 200, jsonObject);
+  }
+
+  public void handleGetAccount(HttpExchange exchange) {
+    String path = exchange.getRequestURI().getPath(); // Get the full request URI
+    String accountId = path.substring(path.lastIndexOf("/") + 1);
+    var jsonResponse = new JsonObject();
+
+    var accountOptional = accountRepository.findByAccountId(accountId);
+
+    if (accountOptional.isEmpty()) {
+      log.error("Request for non existent account {}", accountId);
+      jsonResponse.addProperty("error", "Account not found");
+      Utils.sendResponse(exchange, 404, jsonResponse);
+      return;
+    }
+
+    // Create account DTO and send in response
+    var account = accountOptional.get();
+    jsonResponse.add(
+        "account",
+        new Gson()
+            .toJsonTree(
+                AccountDTO.builder()
+                    .accountId(account.getAccountId())
+                    .balance(account.getBalance().toString())
+                    .build()));
+
+    log.info("Successfully retrieved account with ID: {}", accountId);
+    Utils.sendResponse(exchange, 200, jsonResponse);
   }
 }

@@ -18,25 +18,25 @@ public class InMemoryAccountRepository implements AccountRepository {
   private static final String ACCOUNT_ID_7 = "ACCOUNT_ID_7";
   private static final String ACCOUNT_ID_8 = "ACCOUNT_ID_8";
   private static final String ACCOUNT_ID_9 = "ACCOUNT_ID_9";
-  private static final BigDecimal TEN_THOUSAND_BALANCE = new BigDecimal("10000.00");
+  private static final BigDecimal ONE_HUNDRED_BALANCE = new BigDecimal("100.00");
   private static final BigDecimal ZERO_BALANCE = new BigDecimal("0.00");
 
   public InMemoryAccountRepository() {
     accounts.put(
         ACCOUNT_ID_0,
-        Account.builder().accountId(ACCOUNT_ID_0).balance(TEN_THOUSAND_BALANCE).build());
+        Account.builder().accountId(ACCOUNT_ID_0).balance(ONE_HUNDRED_BALANCE).build());
     accounts.put(
         ACCOUNT_ID_1,
-        Account.builder().accountId(ACCOUNT_ID_1).balance(TEN_THOUSAND_BALANCE).build());
+        Account.builder().accountId(ACCOUNT_ID_1).balance(ONE_HUNDRED_BALANCE).build());
     accounts.put(
         ACCOUNT_ID_2,
-        Account.builder().accountId(ACCOUNT_ID_2).balance(TEN_THOUSAND_BALANCE).build());
+        Account.builder().accountId(ACCOUNT_ID_2).balance(ONE_HUNDRED_BALANCE).build());
     accounts.put(
         ACCOUNT_ID_3,
-        Account.builder().accountId(ACCOUNT_ID_3).balance(TEN_THOUSAND_BALANCE).build());
+        Account.builder().accountId(ACCOUNT_ID_3).balance(ONE_HUNDRED_BALANCE).build());
     accounts.put(
         ACCOUNT_ID_4,
-        Account.builder().accountId(ACCOUNT_ID_4).balance(TEN_THOUSAND_BALANCE).build());
+        Account.builder().accountId(ACCOUNT_ID_4).balance(ONE_HUNDRED_BALANCE).build());
     accounts.put(
         ACCOUNT_ID_5, Account.builder().accountId(ACCOUNT_ID_5).balance(ZERO_BALANCE).build());
     accounts.put(

@@ -5,25 +5,26 @@ import io.restassured.RestAssured;
 import java.net.ServerSocket;
 import java.util.Properties;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
-import service.TransactionService;
+import org.junit.jupiter.api.BeforeEach;
+import service.PaymentService;
 
 public abstract class BaseFunctionalTest {
 
   protected static PaymentController paymentController;
+  protected static InMemoryAccountRepository accountRepository;
+  protected static InMemoryTransactionRepository transactionRepository;
 
-  @BeforeAll
-  public static void setUp() throws Exception {
+  @BeforeEach
+  public void beforeEach() throws Exception {
     int randomPort = getRandomPort();
     Properties config = new Properties();
     config.setProperty("port", String.valueOf(randomPort));
-    InMemoryAccountRepository accountRepository = new InMemoryAccountRepository();
-    InMemoryTransactionRepository transactionRepository = new InMemoryTransactionRepository();
-    TransactionService transactionService =
-        new TransactionService(accountRepository, transactionRepository);
+    accountRepository = new InMemoryAccountRepository();
+    transactionRepository = new InMemoryTransactionRepository();
+    PaymentService paymentService = new PaymentService(accountRepository, transactionRepository);
 
     // Start the server
-    paymentController = new PaymentController(transactionService, config);
+    paymentController = new PaymentController(paymentService, config);
     paymentController.startServer();
 
     // Set the base URI for RestAssured
@@ -35,6 +36,9 @@ public abstract class BaseFunctionalTest {
     if (paymentController != null) {
       paymentController.stopServer();
     }
+    accountRepository = null;
+    transactionRepository = null;
+
   }
 
   private static int getRandomPort() throws Exception {

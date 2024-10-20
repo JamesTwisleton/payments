@@ -3,7 +3,7 @@ import domain.repository.InMemoryAccountRepository;
 import domain.repository.InMemoryTransactionRepository;
 import infrastructure.rest.PaymentController;
 import lombok.extern.slf4j.Slf4j;
-import service.TransactionService;
+import service.PaymentService;
 
 @Slf4j
 public class Payments {
@@ -12,7 +12,7 @@ public class Payments {
     var config = ConfigLoader.loadProperties();
     var accountRepository = new InMemoryAccountRepository();
     var transactionRepository = new InMemoryTransactionRepository();
-    var transactionService = new TransactionService(accountRepository, transactionRepository);
+    var transactionService = new PaymentService(accountRepository, transactionRepository);
     PaymentController controller = new PaymentController(transactionService, config);
 
     // Start the server
