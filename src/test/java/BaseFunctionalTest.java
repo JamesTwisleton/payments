@@ -1,5 +1,6 @@
 import domain.repository.InMemoryAccountRepository;
 import domain.repository.InMemoryPaymentRepository;
+import domain.repository.InMemoryTransactionRepository;
 import infrastructure.messaging.KafkaProducer;
 import infrastructure.rest.PaymentController;
 import io.restassured.RestAssured;
@@ -23,10 +24,11 @@ public abstract class BaseFunctionalTest {
 
     InMemoryPaymentRepository paymentRepository = new InMemoryPaymentRepository();
     InMemoryAccountRepository accountRepository = new InMemoryAccountRepository();
+    InMemoryTransactionRepository transactionRepository = new InMemoryTransactionRepository();
     KafkaProducer kafkaProducer = new KafkaProducer();
 
     PaymentService paymentService = new PaymentService(paymentRepository, kafkaProducer);
-    TransactionService transactionService = new TransactionService(accountRepository);
+    TransactionService transactionService = new TransactionService(accountRepository, transactionRepository);
 
     // Start the server
     paymentController = new PaymentController(paymentService, transactionService, config);

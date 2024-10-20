@@ -1,19 +1,30 @@
 package service;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import domain.dto.TransactionRequestDTO;
 import domain.entity.Account;
+import domain.entity.Transaction;
+import domain.entity.TransactionStatus;
 import domain.repository.AccountRepository;
+import domain.repository.TransactionRepository;
 import lombok.extern.slf4j.Slf4j;
 import util.PaymentUtils;
+
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class TransactionService {
 
   private final AccountRepository accountRepository;
+  private final TransactionRepository transactionRepository;
 
-  public TransactionService(AccountRepository accountRepository) {
+  public TransactionService(
+      AccountRepository accountRepository, TransactionRepository transactionRepository) {
     this.accountRepository = accountRepository;
+    this.transactionRepository = transactionRepository;
   }
 
   public void handlePostTransaction(HttpExchange exchange) {
@@ -30,29 +41,43 @@ public class TransactionService {
 
     var maybeSenderAccount = accountRepository.findByAccountId(senderId);
     var maybeRecipientAccount = accountRepository.findByAccountId(recipientId);
+    var transactionBuilder =
+        Transaction.builder()
+            .transactionId(UUID.randomUUID().toString())
+            .senderId(senderId)
+            .recipientId(recipientId)
+            .amount(amount);
+    var jsonResponse = new JsonObject();
 
     if (maybeSenderAccount.isEmpty()) {
-      PaymentUtils.sendResponse(
-          exchange, 404, String.format("Invalid sender account ID: %s", senderId));
+      jsonResponse.addProperty("error", String.format("Invalid sender account ID: %s", senderId));
+      PaymentUtils.sendResponse(exchange, 404, jsonResponse);
+      transactionRepository.save(
+          transactionBuilder.status(TransactionStatus.SENDER_NOT_FOUND).build());
       return;
     }
 
     if (maybeRecipientAccount.isEmpty()) {
-      PaymentUtils.sendResponse(
-          exchange, 404, String.format("Invalid recipient account ID: %s", recipientId));
+      jsonResponse.addProperty(
+          "error", String.format("Invalid recipient account ID: %s", recipientId));
+      PaymentUtils.sendResponse(exchange, 404, jsonResponse);
+      transactionRepository.save(
+          transactionBuilder.status(TransactionStatus.RECIPIENT_NOT_FOUND).build());
       return;
     }
 
     Account senderAccount = maybeSenderAccount.get();
     Account recipientAccount = maybeRecipientAccount.get();
 
-    // Acquire locks using utility method
     PaymentUtils.acquireLocks(senderAccount, recipientAccount);
 
     try {
       if (senderAccount.getBalance().compareTo(amount) < 0) {
-        PaymentUtils.sendResponse(
-            exchange, 400, String.format("Insufficient balance in sender account %s", senderId));
+        jsonResponse.addProperty(
+            "error", String.format("Insufficient balance in sender account %s", senderId));
+        PaymentUtils.sendResponse(exchange, 400, jsonResponse);
+        transactionRepository.save(
+            transactionBuilder.status(TransactionStatus.INSUFFICIENT_BALANCE).build());
         return;
       }
 
@@ -68,11 +93,26 @@ public class TransactionService {
           recipientId,
           recipientAccount.getBalance());
 
-      PaymentUtils.sendResponse(exchange, 200, "Transaction successful!");
+      transactionRepository.save(transactionBuilder.status(TransactionStatus.SUCCESS).build());
+
+      var successResponse = new JsonObject();
+      successResponse.addProperty("message", "Transaction successful!");
+      PaymentUtils.sendResponse(exchange, 200, successResponse);
 
     } finally {
-      // Release locks using utility method
       PaymentUtils.releaseLocks(senderAccount, recipientAccount);
     }
+  }
+
+  public void handleGetTransactions(HttpExchange exchange) {
+    var transactionDtos =
+        transactionRepository.findAll().values().stream()
+            .map(Transaction::toResponseDto)
+            .collect(Collectors.toList());
+
+    var jsonObject = new JsonObject();
+    jsonObject.add("transactions", new Gson().toJsonTree(transactionDtos));
+
+    PaymentUtils.sendResponse(exchange, 200, jsonObject);
   }
 }

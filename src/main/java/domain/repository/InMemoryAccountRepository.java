@@ -55,4 +55,9 @@ public class InMemoryAccountRepository implements AccountRepository {
   public Optional<Account> findByAccountId(String accountId) {
     return Optional.ofNullable(accounts.get(accountId));
   }
-}
+
+  @Override
+  public Map<String, Account> findAll() {
+    return accounts;
+  }
+ }
